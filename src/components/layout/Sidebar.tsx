@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Package,
   FileText,
+  FileBarChart2,
   Settings,
   LogOut,
   ChevronLeft,
@@ -17,6 +18,7 @@ const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
   { icon: Package, label: 'Products', path: '/products' },
   { icon: FileText, label: 'Bills', path: '/bills' },
+  { icon: FileBarChart2, label: 'Statements', path: '/statements' },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
@@ -37,10 +39,10 @@ export function Sidebar() {
         <Menu className="w-5 h-5" />
       </Button>
 
-      {/* Overlay for mobile */}
+      {/* Mobile overlay */}
       {!collapsed && (
         <div
-          className="fixed inset-0 bg-foreground/20 backdrop-blur-sm z-40 lg:hidden"
+          className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden"
           onClick={() => setCollapsed(true)}
         />
       )}
@@ -48,25 +50,37 @@ export function Sidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-0 h-screen z-50 transition-all duration-300 ease-in-out',
+          // Desktop: fixed height inside the viewport layout
+          // Mobile: fixed overlay sidebar
+          'z-50 h-screen shrink-0 transition-all duration-300 ease-in-out',
           'bg-sidebar border-r border-sidebar-border',
           'lg:relative lg:translate-x-0',
-          collapsed ? '-translate-x-full lg:w-20' : 'translate-x-0 w-64'
+          collapsed
+            ? '-translate-x-full lg:w-20'
+            : 'translate-x-0 w-64',
+          // Mobile positioning
+          'fixed left-0 top-0 lg:static'
         )}
         style={{ background: 'var(--gradient-sidebar)' }}
       >
-        <div className="flex flex-col h-full">
+        <div className="flex h-full min-h-0 flex-col">
           {/* Header */}
-          <div className={cn(
-            'flex items-center gap-3 p-6 border-b border-sidebar-border',
-            collapsed && 'lg:justify-center lg:px-4'
-          )}>
+          <div
+            className={cn(
+              'flex shrink-0 items-center gap-3 p-6 border-b border-sidebar-border',
+              collapsed && 'lg:justify-center lg:px-4'
+            )}
+          >
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-accent/80 flex items-center justify-center text-accent-foreground font-bold shadow-glow">
               SF
             </div>
+
             {!collapsed && (
-              <div className="animate-fade-in">
-                <h1 className="font-bold text-sidebar-foreground">StockFlow</h1>
+              <div className="animate-fade-in min-w-0">
+                <h1 className="font-bold text-sidebar-foreground">
+                  StockFlow
+                </h1>
+
                 <p className="text-xs text-sidebar-foreground/60 truncate max-w-[140px]">
                   {profile?.company_name || 'Your Business'}
                 </p>
@@ -75,9 +89,10 @@ export function Sidebar() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-1">
+          <nav className="min-h-0 flex-1 overflow-y-auto p-4 space-y-1">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
+
               return (
                 <NavLink
                   key={item.path}
@@ -87,17 +102,32 @@ export function Sidebar() {
                     isActive && 'sidebar-link-active',
                     collapsed && 'lg:justify-center lg:px-3'
                   )}
-                  onClick={() => window.innerWidth < 1024 && setCollapsed(true)}
+                  onClick={() => {
+                    if (window.innerWidth < 1024) {
+                      setCollapsed(true);
+                    }
+                  }}
                 >
-                  <item.icon className={cn('w-5 h-5 flex-shrink-0', isActive && 'text-sidebar-primary')} />
-                  {!collapsed && <span className="animate-fade-in">{item.label}</span>}
+                  <item.icon
+                    className={cn(
+                      'w-5 h-5 flex-shrink-0',
+                      isActive && 'text-sidebar-primary'
+                    )}
+                  />
+
+                  {!collapsed && (
+                    <span className="animate-fade-in">
+                      {item.label}
+                    </span>
+                  )}
                 </NavLink>
               );
             })}
           </nav>
 
           {/* Footer */}
-          <div className="p-4 border-t border-sidebar-border space-y-2">
+          <div className="shrink-0 p-4 border-t border-sidebar-border space-y-2">
+            {/* Sign Out */}
             <button
               onClick={signOut}
               className={cn(
@@ -106,10 +136,11 @@ export function Sidebar() {
               )}
             >
               <LogOut className="w-5 h-5 flex-shrink-0" />
+
               {!collapsed && <span>Sign Out</span>}
             </button>
 
-            {/* Collapse button - desktop only */}
+            {/* Collapse button */}
             <Button
               variant="ghost"
               size="sm"
@@ -119,8 +150,18 @@ export function Sidebar() {
               )}
               onClick={() => setCollapsed(!collapsed)}
             >
-              <ChevronLeft className={cn('w-4 h-4 transition-transform', collapsed && 'rotate-180')} />
-              {!collapsed && <span className="ml-2">Collapse</span>}
+              <ChevronLeft
+                className={cn(
+                  'w-4 h-4 transition-transform',
+                  collapsed && 'rotate-180'
+                )}
+              />
+
+              {!collapsed && (
+                <span className="ml-2">
+                  Collapse
+                </span>
+              )}
             </Button>
           </div>
         </div>

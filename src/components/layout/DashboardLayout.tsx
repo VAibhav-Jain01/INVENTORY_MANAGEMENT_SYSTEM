@@ -32,9 +32,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="h-screen w-full flex overflow-hidden bg-background">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
+
+      <main className="min-w-0 min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div className="p-6 lg:p-8 pt-16 lg:pt-8">
           {children}
         </div>
