@@ -529,48 +529,185 @@ export default function Bills() {
   /* -------------------
      Download PDF using html2pdf.js (client-side)
      ------------------- */
-  const downloadPdf = async (bill: Bill, itemsToPrint: BillItem[]) => {
-    let html2pdf: any;
-    try {
-      html2pdf = (await import("html2pdf.js")).default || (await import("html2pdf.js"));
-    } catch (e) {
-      toast({
-        title: "Missing dependency",
-        description: "Please install html2pdf.js: `npm i html2pdf.js`",
-        variant: "destructive",
-      });
-      console.error(e);
-      return;
-    }
+  
+const downloadPdf = async (bill: Bill, itemsToPrint: BillItem[]) => {
+  let html2pdf: any;
 
+  try {
+    const module = await import("html2pdf.js");
+    html2pdf = module.default || module;
+  } catch (error) {
+    console.error("Failed to load html2pdf.js:", error);
+
+    toast({
+      title: "Missing dependency",
+      description: "Please install html2pdf.js using: npm install html2pdf.js",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  let container: HTMLDivElement | null = null;
+
+  try {
     const company = profile;
     const htmlString = generateInvoiceHtml(bill, itemsToPrint, company);
 
-    const container = document.createElement("div");
-    container.style.position = "fixed";
-    container.style.left = "-9999px";
-    container.style.top = "0";
-    container.innerHTML = htmlString;
+    // Parse the complete invoice HTML document correctly.
+    const parser = new DOMParser();
+    const parsedDocument = parser.parseFromString(
+      htmlString,
+      "text/html"
+    );
+
+    // Extract only the invoice element.
+    const invoiceElement = parsedDocument.querySelector(
+      ".invoice"
+    ) as HTMLElement | null;
+
+    if (!invoiceElement) {
+      throw new Error(
+        "Invoice element not found. Check the .invoice class in generateInvoiceHtml()."
+      );
+    }
+
+    // Create a temporary container that can be captured by html2canvas.
+    container = document.createElement("div");
+
+    Object.assign(container.style, {
+      position: "fixed",
+      left: "0",
+      top: "0",
+      width: "80mm",
+      margin: "0",
+      padding: "0",
+      backgroundColor: "#ffffff",
+      zIndex: "999999",
+      overflow: "visible",
+    });
+
+    // Copy the invoice's original CSS styles.
+    parsedDocument
+      .querySelectorAll("style")
+      .forEach((originalStyle) => {
+        const style = document.createElement("style");
+        style.textContent = originalStyle.textContent || "";
+        container!.appendChild(style);
+      });
+
+    // Clone the invoice so the original page remains unchanged.
+    const invoiceClone = invoiceElement.cloneNode(
+      true
+    ) as HTMLElement;
+
+    Object.assign(invoiceClone.style, {
+      width: "80mm",
+      minWidth: "80mm",
+      maxWidth: "80mm",
+      boxSizing: "border-box",
+      margin: "0",
+      backgroundColor: "#ffffff",
+      color: "#000000",
+      overflow: "visible",
+    });
+
+    container.appendChild(invoiceClone);
     document.body.appendChild(container);
 
-    const opt = {
-      margin: [10, 10, 10, 10],
+    // Wait for the browser to calculate the invoice layout.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+
+    // Wait for any images used by the invoice.
+    const images = Array.from(
+      container.querySelectorAll("img")
+    );
+
+    await Promise.all(
+      images.map((img) => {
+        if (img.complete) {
+          return Promise.resolve();
+        }
+
+        return new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve();
+        });
+      })
+    );
+
+    // Calculate the receipt height in millimetres.
+    const invoiceHeightPx = Math.max(
+      invoiceClone.scrollHeight,
+      invoiceClone.getBoundingClientRect().height
+    );
+
+    if (!invoiceHeightPx || invoiceHeightPx <= 0) {
+      throw new Error("The invoice has no printable height.");
+    }
+
+    // CSS uses 96 pixels per inch; there are 25.4 mm per inch.
+    const invoiceHeightMm = invoiceHeightPx * (25.4 / 96);
+    const pageHeightMm = Math.ceil(invoiceHeightMm + 2);
+
+    const options = {
+      margin: 0,
       filename: `${bill.bill_number}.pdf`,
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      image: {
+        type: "jpeg",
+        quality: 0.98,
+      },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        scrollX: 0,
+        scrollY: 0,
+        logging: false,
+      },
+      jsPDF: {
+        unit: "mm",
+        format: [80, pageHeightMm],
+        orientation: "portrait",
+        compress: true,
+      },
+      pagebreak: {
+        mode: ["avoid-all"],
+      },
     };
 
-    try {
-      await html2pdf().set(opt).from(container).save();
-      toast({ title: "Success", description: "PDF downloaded" });
-    } catch (err) {
-      console.error("PDF generation error:", err);
-      toast({ title: "Error", description: "Failed to generate PDF", variant: "destructive" });
-    } finally {
-      document.body.removeChild(container);
+    // Generate a receipt-width PDF with a height based on its content.
+    await html2pdf()
+      .set(options)
+      .from(invoiceClone)
+      .save();
+
+    toast({
+      title: "Success",
+      description: "80 mm receipt PDF downloaded successfully.",
+    });
+  } catch (error) {
+    console.error("PDF generation error:", error);
+
+    toast({
+      title: "PDF Download Failed",
+      description:
+        error instanceof Error
+          ? error.message
+          : "Unable to generate the PDF. Please try again.",
+      variant: "destructive",
+    });
+  } finally {
+    // Remove temporary elements without affecting the billing page.
+    if (container?.parentNode) {
+      container.parentNode.removeChild(container);
     }
-  };
+  }
+};
+
 
   /* -------------------
      Cancel modal logic (custom modal replaces window.confirm)
